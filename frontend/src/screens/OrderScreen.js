@@ -1,88 +1,107 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { PayPalButton } from 'react-paypal-button-v2';
+import { useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { Row, Col, ListGroup, Image, Card, Button } from 'react-bootstrap';
-import { useDispatch, useSelector } from 'react-redux';
+import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
+import { useSelector } from 'react-redux';
+import { toast } from 'react-toastify';
 import Message from '../components/Message';
-import { useNavigate, useParams } from 'react-router';
 import Loader from '../components/Loader';
-import { Link } from 'react-router-dom';
 import {
-  getOrderDetails,
-  payOrder,
-  deliverOrder,
-} from '../actions/orderActions';
-import {
-  ORDER_PAY_RESET,
-  ORDER_DELIVER_RESET,
-} from '../constants/orderConstants';
+  useDeliverOrderMutation,
+  useGetOrderDetailsQuery,
+  useGetPaypalClientIdQuery,
+  usePayOrderMutation,
+} from '../slices/ordersApiSlice';
 
 const OrderScreen = () => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const [sdkReady, setSdkReady] = useState(false);
-
   let { id: orderId } = useParams();
 
-  const orderDetails = useSelector((state) => state.orderDetails);
-  const { order, loading, error } = orderDetails;
+  const {
+    data: order,
+    refetch,
+    isLoading,
+    error,
+  } = useGetOrderDetailsQuery(orderId);
 
-  const userLogin = useSelector((state) => state.userLogin);
-  const { userInfo } = userLogin;
+  const [payOrder, { isLoading: loadingPay }] = usePayOrderMutation();
 
-  const orderPay = useSelector((state) => state.orderPay);
-  const { loading: loadingPay, success: successPay } = orderPay;
+  const [deliverOrder, { isLoading: loadingDeliver }] =
+    useDeliverOrderMutation();
 
-  const orderDeliver = useSelector((state) => state.orderDeliver);
-  const { loading: loadingDeliver, success: successDeliver } = orderDeliver;
+  const { userInfo } = useSelector((state) => state.auth);
+
+  const [{ isPending }, paypalDispatch] = usePayPalScriptReducer();
+
+  const {
+    data: paypal,
+    isLoading: loadingPayPal,
+    error: errorPayPal,
+  } = useGetPaypalClientIdQuery();
 
   useEffect(() => {
-    if (!userInfo) {
-      navigate('/login');
-    }
-
-    const addPayPalScript = async () => {
-      const { data: clientId } = await axios.get('/api/config/paypal');
-      const script = document.createElement('script');
-      script.type = 'text/javascript';
-      script.async = true;
-      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}`;
-      script.onload = () => {
-        setSdkReady(true);
+    if (!errorPayPal && !loadingPayPal && paypal.clientId) {
+      const loadPaypalScript = async () => {
+        paypalDispatch({
+          type: 'resetOptions',
+          value: {
+            'client-id': paypal.clientId,
+            currency: 'USD',
+          },
+        });
+        paypalDispatch({ type: 'setLoadingStatus', value: 'pending' });
       };
-      document.body.appendChild(script);
-    };
-
-    if (!order || order._id !== orderId || successPay || successDeliver) {
-      dispatch({ type: ORDER_PAY_RESET });
-      dispatch({ type: ORDER_DELIVER_RESET });
-      dispatch(getOrderDetails(orderId));
-    } else if (!order.isPaid) {
-      if (!window.paypal) {
-        addPayPalScript();
-      } else {
-        setSdkReady(true);
+      if (order && !order.isPaid) {
+        if (!window.paypal) {
+          loadPaypalScript();
+        }
       }
     }
-  }, [
-    order,
-    orderId,
-    dispatch,
-    successDeliver,
-    successPay,
-    navigate,
-    userInfo,
-  ]);
+  }, [errorPayPal, loadingPayPal, order, paypal, paypalDispatch]);
 
-  const successPaymentHandler = (paymentResult) => {
-    dispatch(payOrder(orderId, paymentResult));
+  function onApprove(data, actions) {
+    return actions.order.capture().then(async function (details) {
+      try {
+        await payOrder({ orderId, details });
+        refetch();
+        toast.success('Order is paid');
+      } catch (err) {
+        toast.error(err?.data?.message || err.error);
+      }
+    });
+  }
+
+  // TESTING ONLY! REMOVE BEFORE PRODUCTION
+  // async function onApproveTest() {
+  //   await payOrder({ orderId, details: { payer: {} } });
+  //   refetch();
+
+  //   toast.success('Order is paid');
+  // }
+
+  function onError(err) {
+    toast.error(err.message);
+  }
+
+  function createOrder(data, actions) {
+    return actions.order
+      .create({
+        purchase_units: [
+          {
+            amount: { value: order.totalPrice },
+          },
+        ],
+      })
+      .then((orderID) => {
+        return orderID;
+      });
+  }
+
+  const deliverHandler = async () => {
+    await deliverOrder(orderId);
+    refetch();
   };
 
-  const deliverHandler = () => {
-    dispatch(deliverOrder(order));
-  };
-
-  return loading ? (
+  return isLoading ? (
     <Loader />
   ) : error ? (
     <Message variant='danger'>{error}</Message>
@@ -198,13 +217,27 @@ const OrderScreen = () => {
               {!order.isPaid && (
                 <ListGroup.Item>
                   {loadingPay && <Loader />}
-                  {!sdkReady ? (
+
+                  {isPending ? (
                     <Loader />
                   ) : (
-                    <PayPalButton
-                      amount={order.totalPrice}
-                      onSuccess={successPaymentHandler}
-                    />
+                    <div>
+                      {/* THIS BUTTON IS FOR TESTING! REMOVE BEFORE PRODUCTION! */}
+                      {/* <Button
+                        style={{ marginBottom: '10px' }}
+                        onClick={onApproveTest}
+                      >
+                        Test Pay Order
+                      </Button> */}
+
+                      <div>
+                        <PayPalButtons
+                          createOrder={createOrder}
+                          onApprove={onApprove}
+                          onError={onError}
+                        ></PayPalButtons>
+                      </div>
+                    </div>
                   )}
                 </ListGroup.Item>
               )}

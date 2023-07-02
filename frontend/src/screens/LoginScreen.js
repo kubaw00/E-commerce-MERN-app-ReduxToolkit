@@ -1,43 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { Form, Button, Row, Col } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
-import Message from '../components/Message';
-import Loader from '../components/Loader';
-import { login } from '../actions/userActions';
+
+import { useLoginMutation } from '../slices/usersApiSlice';
+import { setCredentials } from '../slices/authSlice';
 import FormContainer from '../components/FormContainer';
-import { useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const dispatch = useDispatch();
-
-  const userLogin = useSelector((state) => state.userLogin);
-  const { loading, error, userInfo } = userLogin;
-
-  const location = useLocation();
   const navigate = useNavigate();
 
-  const redirect = location.search ? location.search.split('=')[1] : '/';
+  const [login, { isLoading }] = useLoginMutation();
+  const { userInfo } = useSelector((state) => state.auth);
+
+  const { search } = useLocation();
+  const sp = new URLSearchParams(search);
+  const redirect = sp.get('redirect') || '/';
 
   useEffect(() => {
     if (userInfo) {
-      navigate(-1);
+      navigate(redirect);
     }
-  });
+  }, [navigate, redirect, userInfo]);
 
-  const submitHandler = (e) => {
+  const submitHandler = async (e) => {
     e.preventDefault();
-    dispatch(login(email, password));
+    try {
+      const res = await login({ email, password }).unwrap();
+      dispatch(setCredentials({ ...res }));
+      navigate(redirect);
+    } catch (err) {
+      toast.error(err?.data?.message || err.error);
+    }
   };
 
   return (
     <FormContainer>
       <h1>Sign In</h1>
-      {error && <Message variant='danger'>{error}</Message>}
-      {loading && <Loader />}
+
       <Form onSubmit={submitHandler}>
         <Form.Group controlId='email'>
           <Form.Label>Email Address</Form.Label>
@@ -58,11 +63,17 @@ const LoginScreen = () => {
           ></Form.Control>
         </Form.Group>
 
-        <Button className='my-3' type='submit' variant='primary'>
+        <Button
+          disabled={isLoading}
+          className='my-3'
+          type='submit'
+          variant='primary'
+        >
           Sign In
         </Button>
       </Form>
-      <Row>
+
+      <Row className='py-3'>
         <Col>
           New Customer?{' '}
           <Link
