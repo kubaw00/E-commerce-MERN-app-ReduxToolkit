@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Row,
@@ -10,18 +10,17 @@ import {
   Form,
 } from 'react-bootstrap';
 import Rating from '../components/Rating';
+import { toast } from 'react-toastify';
 import Meta from '../components/Meta';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams } from 'react-router';
 import {
-  listProductDetails,
-  createProductReview,
-} from '../actions/productActions';
+  useGetProductDetailsQuery,
+  useCreateReviewMutation,
+} from '../slices/productsApiSlice';
 import Loader from '../components/Loader';
 import Message from '../components/Message';
-import { useNavigate } from 'react-router';
-import { addToCart } from '../actions/cartActions';
-import { PRODUCT_CREATE_REVIEW_RESET } from '../constants/productConstants';
+import { useNavigate, useParams } from 'react-router-dom';
+import { addToCart } from '../slices/cartSlice';
 
 const ProductScreen = () => {
   const [qty, setQty] = useState(1);
@@ -29,52 +28,56 @@ const ProductScreen = () => {
   const [comment, setComment] = useState('');
 
   const dispatch = useDispatch();
-
   const navigate = useNavigate();
-  let { id } = useParams();
 
-  const productDetails = useSelector((store) => store.productDetails);
-  const { product, loading, error } = productDetails;
+  const { id: productId } = useParams();
 
-  const userLogin = useSelector((store) => store.userLogin);
-  const { userInfo } = userLogin;
+  const {
+    data: product,
+    isLoading,
+    refetch,
+    error,
+  } = useGetProductDetailsQuery(productId);
 
-  const productReviewCreate = useSelector((store) => store.productReviewCreate);
-  const { success: successProductReview, error: errorProductReview } =
-    productReviewCreate;
+  const { userInfo } = useSelector((state) => state.auth);
 
-  useEffect(() => {
-    if (successProductReview) {
-      alert('Review Submitted');
-      setComment('');
-      setRating(0);
-      dispatch({ type: PRODUCT_CREATE_REVIEW_RESET });
-    }
-    dispatch(listProductDetails(id));
-  }, [dispatch, id, successProductReview]);
+  const [createReview, { isLoading: loadingProductReview }] =
+    useCreateReviewMutation();
 
   const addToCartHandler = () => {
-    dispatch(addToCart(product._id, qty));
-    navigate(`/cart`);
+    dispatch(addToCart({ ...product, qty }));
+    navigate('/cart');
   };
 
-  const submitHandler = (e) => {
+  const submitHandler = async (e) => {
     e.preventDefault();
-    dispatch(createProductReview(id, { rating, comment }));
-  };
 
+    try {
+      await createReview({
+        productId,
+        rating,
+        comment,
+      }).unwrap();
+      refetch();
+      toast.success('Review created successfully');
+    } catch (err) {
+      toast.error(err?.data?.message || err.error);
+    }
+  };
   return (
     <>
       <Link className='btn btn-dark my-3' to='/'>
         Go Back
       </Link>
-      {loading ? (
+      {isLoading ? (
         <Loader />
       ) : error ? (
-        <Message variant='danger'>{error}</Message>
+        <Message variant='danger'>
+          {error?.data?.message || error.error}
+        </Message>
       ) : (
         <>
-          <Meta title={product.name} />
+          <Meta title={product.name} description={product.description} />
           <Row>
             <Col sm={6}>
               <Image src={product.image} alt={product.name} fluid />
@@ -167,9 +170,9 @@ const ProductScreen = () => {
 
                 <ListGroup.Item>
                   <h2>Write a Customer Review</h2>
-                  {errorProductReview && (
-                    <Message variant='danger'>{errorProductReview}</Message>
-                  )}
+
+                  {loadingProductReview && <Loader />}
+
                   {userInfo ? (
                     <Form onSubmit={submitHandler}>
                       <Form.Group controlId='rating'>
@@ -197,7 +200,12 @@ const ProductScreen = () => {
                         ></Form.Control>
                       </Form.Group>
 
-                      <Button className='my-2' type='submit' variant='primary'>
+                      <Button
+                        disabled={loadingProductReview}
+                        className='my-2'
+                        type='submit'
+                        variant='primary'
+                      >
                         Submit
                       </Button>
                     </Form>

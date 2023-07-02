@@ -1,67 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Row, Col, Table } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+
 import { useDispatch, useSelector } from 'react-redux';
 import Message from '../components/Message';
 import Loader from '../components/Loader';
-import { getUserDetails, updateUserProfile } from '../actions/userActions';
-import { useNavigate } from 'react-router';
-import { USER_UPDATE_PROFILE_RESET } from '../constants/userConstants';
-import { listMyOrders } from '../actions/orderActions';
+
+import { FaTimes } from 'react-icons/fa';
+import { setCredentials } from '../slices/authSlice';
+
+import { LinkContainer } from 'react-router-bootstrap';
+import { toast } from 'react-toastify';
+import { useProfileMutation } from '../slices/usersApiSlice';
+import { useGetMyOrdersQuery } from '../slices/ordersApiSlice';
 
 const ProfileScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
-  const [message, setMessage] = useState(null);
-  const [profileUpdated, setProfileUpdated] = useState(false);
 
   const dispatch = useDispatch();
 
-  const userDetails = useSelector((state) => state.userDetails);
-  const { loading, error, user } = userDetails;
+  const { userInfo } = useSelector((state) => state.auth);
 
-  const userLogin = useSelector((state) => state.userLogin);
-  const { userInfo } = userLogin;
+  const [updateProfile, { isLoading: loadingUpdateProfile }] =
+    useProfileMutation();
 
-  const userUpdateProfile = useSelector((state) => state.userUpdateProfile);
-  const { success } = userUpdateProfile;
-
-  const orderListMy = useSelector((state) => state.orderMyList);
-  const { loading: loadingOrders, error: errorOrders, orders } = orderListMy;
-
-  const navigate = useNavigate();
+  const { data: orders, isLoading, error } = useGetMyOrdersQuery();
 
   useEffect(() => {
-    if (!userInfo) {
-      navigate('/login');
-      return;
-    } else {
-      if (!user || !user.name) {
-        dispatch(getUserDetails('profile'));
-        dispatch(listMyOrders());
-        return;
-      }
-      if (success) {
-        dispatch({ type: USER_UPDATE_PROFILE_RESET });
-        dispatch(getUserDetails('profile'));
-        setProfileUpdated(true);
-        return;
-      }
-      setName(user.name);
-      setEmail(user.email);
-    }
-  }, [dispatch, navigate, userInfo, user, success, message]);
+    setName(userInfo.name);
+    setEmail(userInfo.email);
+  }, [userInfo.email, userInfo.name]);
 
-  const submitHandler = (e) => {
+  const submitHandler = async (e) => {
     e.preventDefault();
-    setProfileUpdated(false);
-    setMessage(null);
     if (password !== confirmPassword) {
-      setMessage('Password do not match');
+      toast.error('Passwords do not match');
     } else {
-      dispatch(updateUserProfile({ id: user._id, name, email, password }));
+      try {
+        const res = await updateProfile({
+          _id: userInfo._id,
+          name,
+          email,
+          password,
+        }).unwrap();
+        dispatch(setCredentials({ ...res }));
+        toast.success('Profile updated successfully');
+      } catch (err) {
+        toast.error(err?.data?.message || err.error);
+      }
     }
   };
 
@@ -69,10 +57,7 @@ const ProfileScreen = () => {
     <Row>
       <Col md={3}>
         <h2>User Profile</h2>
-        {message && <Message variant='danger'>{message}</Message>}
-        {error && <Message variant='danger'>{error}</Message>}
-        {profileUpdated && <Message variant='success'>Profile Updated</Message>}
-        {loading && <Loader />}
+
         <Form onSubmit={submitHandler}>
           <Form.Group controlId='name'>
             <Form.Label>Name</Form.Label>
@@ -114,14 +99,17 @@ const ProfileScreen = () => {
           <Button className='my-3' type='submit' variant='primary'>
             Update
           </Button>
+          {loadingUpdateProfile && <Loader />}
         </Form>
       </Col>
       <Col md={9}>
         <h2>My Orders</h2>
-        {loadingOrders ? (
+        {isLoading ? (
           <Loader />
-        ) : errorOrders ? (
-          <Message variant='danger'>{errorOrders}</Message>
+        ) : error ? (
+          <Message variant='danger'>
+            {error?.data?.message || error.error}
+          </Message>
         ) : (
           <Table striped bordered hover responsive className='table-sm'>
             <thead>
@@ -144,22 +132,22 @@ const ProfileScreen = () => {
                     {order.isPaid ? (
                       order.paidAt.substring(0, 10)
                     ) : (
-                      <i className='fas fa-times' style={{ color: 'red' }}></i>
+                      <FaTimes style={{ color: 'red' }} />
                     )}
                   </td>
                   <td>
                     {order.isDelivered ? (
                       order.deliveredAt.substring(0, 10)
                     ) : (
-                      <i className='fas fa-times' style={{ color: 'red' }}></i>
+                      <FaTimes style={{ color: 'red' }} />
                     )}
                   </td>
                   <td>
-                    <Link to={`/order/${order._id}`}>
+                    <LinkContainer to={`/order/${order._id}`}>
                       <Button className='btn-sm' variant='light'>
                         Details
                       </Button>
-                    </Link>
+                    </LinkContainer>
                   </td>
                 </tr>
               ))}
