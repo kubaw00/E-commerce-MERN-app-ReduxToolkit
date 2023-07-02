@@ -1,27 +1,23 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import Meta from '../components/Meta';
-import { useDispatch, useSelector } from 'react-redux';
+import { useGetProductsQuery } from '../slices/productsApiSlice';
 import { Row, Col } from 'react-bootstrap';
 import Product from '../components/Product';
 import Message from '../components/Message';
 import Loader from '../components/Loader';
 import Paginate from '../components/Paginate';
-import { listProducts } from '../actions/productActions';
+
 import { useParams } from 'react-router';
 import ProductCarousel from '../components/ProductCarousel';
 import { Link } from 'react-router-dom';
 
 const HomeScreen = () => {
-  const dispatch = useDispatch();
-  const productList = useSelector((state) => state.productList);
-  const { loading, error, products, page, pages } = productList;
-
   let { keyword, pageNumber = 1 } = useParams();
 
-  useEffect(() => {
-    dispatch(listProducts(keyword, pageNumber));
-  }, [dispatch, keyword, pageNumber]);
-
+  const { data, isLoading, error } = useGetProductsQuery({
+    keyword,
+    pageNumber,
+  });
   return (
     <>
       <Meta />
@@ -33,14 +29,16 @@ const HomeScreen = () => {
         </Link>
       )}
       <h1>Latest Products</h1>
-      {loading ? (
+      {isLoading ? (
         <Loader />
       ) : error ? (
-        <Message variant='danger'>{error}</Message>
+        <Message variant='danger'>
+          {error?.data?.message || error.error}
+        </Message>
       ) : (
         <>
           <Row>
-            {products.map((product) => (
+            {data.products.map((product) => (
               <Col
                 className='align-items-stretch justify-content-around d-flex'
                 key={product._id}
@@ -54,8 +52,8 @@ const HomeScreen = () => {
             ))}
           </Row>
           <Paginate
-            pages={pages}
-            page={page}
+            pages={data.pages}
+            page={data.page}
             keyword={keyword ? keyword : ''}
           />
         </>

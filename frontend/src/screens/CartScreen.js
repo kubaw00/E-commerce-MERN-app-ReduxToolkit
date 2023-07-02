@@ -1,7 +1,7 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Message from '../components/Message';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Row,
   Col,
@@ -11,33 +11,30 @@ import {
   Card,
   Image,
 } from 'react-bootstrap';
-import { addToCart, removeFromCart } from '../actions/cartActions';
-import { useNavigate } from 'react-router';
+import { addToCart, removeFromCart } from '../slices/cartSlice';
 
 const CartScreen = () => {
   const navigate = useNavigate();
 
   const dispatch = useDispatch();
   const cartItems = useSelector((state) => state.cart.cartItems);
-  const userLogin = useSelector((state) => state.userLogin);
-  const { userInfo } = userLogin;
+
+  const addToCartHandler = async (product, qty) => {
+    dispatch(addToCart({ ...product, qty }));
+  };
 
   const removeFromCartHandler = (id) => {
     dispatch(removeFromCart(id));
   };
 
   const checkoutHandler = () => {
-    if (userInfo) {
-      navigate('/shipping');
-    } else {
-      navigate('/login');
-    }
+    navigate('/login?redirect=/shipping');
   };
 
   return (
     <Row>
       <Col md={8}>
-        <h1>Shopping Cart</h1>
+        <h1 style={{ marginBottom: '20px' }}>Shopping Cart</h1>
         {cartItems.length === 0 ? (
           <Message>
             Your cart is empty <Link to='/'>Go Back</Link>
@@ -58,12 +55,9 @@ const CartScreen = () => {
                     <Form.Select
                       as='select'
                       value={item.qty}
-                      onChange={(e) => {
-                        dispatch(
-                          addToCart(item.product, Number(e.target.value))
-                        );
-                        navigate('/cart');
-                      }}
+                      onChange={(e) =>
+                        addToCartHandler(item, Number(e.target.value))
+                      }
                     >
                       <option key={1} value={1}>
                         1
@@ -79,7 +73,7 @@ const CartScreen = () => {
                     <Button
                       type='button'
                       variant='light'
-                      onClick={() => removeFromCartHandler(item.product)}
+                      onClick={() => removeFromCartHandler(item._id)}
                     >
                       <i className='fas fa-trash'></i>
                     </Button>
