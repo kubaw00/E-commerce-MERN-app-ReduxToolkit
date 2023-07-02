@@ -2,47 +2,30 @@ import React, { useEffect } from 'react';
 import { Button, Row, Col, ListGroup, Image, Card } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import Message from '../components/Message';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router-dom';
 import CheckoutSteps from '../components/CheckoutSteps';
-import { Link } from 'react-router-dom';
-import { createOrder } from '../actions/orderActions';
+import { clearCartItems } from '../slices/cartSlice';
+import { useCreateOrderMutation } from '../slices/ordersApiSlice';
+import Loader from '../components/Loader';
+import { toast } from 'react-toastify';
 
 const PlaceOrderScreen = () => {
   const cart = useSelector((state) => state.cart);
+  const [createOrder, { isLoading, error }] = useCreateOrderMutation();
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const addDecimals = (num) => {
-    return (Math.round(num * 100) / 100).toFixed(2);
-  };
-
-  //CALCULATE PRICES
-
-  cart.itemsPrice = addDecimals(
-    cart.cartItems
-      .reduce((acc, item) => acc + item.price * item.qty, 0)
-      .toFixed(2)
-  );
-
-  cart.shippingPrice = Number(cart.itemsPrice > 100 ? 0 : 10);
-  cart.taxPrice = addDecimals(Number((0.15 * cart.itemsPrice).toFixed(2)));
-  cart.totalPrice = addDecimals(
-    Number(cart.shippingPrice) + Number(cart.taxPrice) + Number(cart.itemsPrice)
-  );
-
-  const orderCreate = useSelector((state) => state.orderCreate);
-  const { order, success, error } = orderCreate;
-
   useEffect(() => {
-    if (success) {
-      navigate(`/order/${order._id}`);
+    if (!cart.shippingAddress.address) {
+      navigate('/shipping');
+    } else if (!cart.paymentMethod) {
+      navigate('/payment');
     }
-    // eslint-disable-next-line
-  }, [navigate, success]);
+  }, [cart.paymentMethod, cart.shippingAddress.address, navigate]);
 
-  const placeOrderHandler = () => {
-    dispatch(
-      createOrder({
+  const placeOrderHandler = async () => {
+    try {
+      const res = await createOrder({
         orderItems: cart.cartItems,
         shippingAddress: cart.shippingAddress,
         paymentMethod: cart.paymentMethod,
@@ -50,10 +33,13 @@ const PlaceOrderScreen = () => {
         shippingPrice: cart.shippingPrice,
         taxPrice: cart.taxPrice,
         totalPrice: cart.totalPrice,
-      })
-    );
+      }).unwrap();
+      dispatch(clearCartItems());
+      navigate(`/order/${res._id}`);
+    } catch (err) {
+      toast.error(err);
+    }
   };
-
   return (
     <>
       <CheckoutSteps step1 step2 step3 step4 />
@@ -150,6 +136,7 @@ const PlaceOrderScreen = () => {
                 >
                   Place Order
                 </Button>
+                {isLoading && <Loader />}
               </ListGroup.Item>
             </ListGroup>
           </Card>

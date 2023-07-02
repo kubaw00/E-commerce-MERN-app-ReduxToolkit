@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Col } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import FormContainer from '../components/FormContainer';
-import { useNavigate } from 'react-router';
-import { savePaymentMethod } from '../actions/cartActions';
+import { useNavigate } from 'react-router-dom';
+import { savePaymentMethod } from '../slices/cartSlice';
 import CheckoutSteps from '../components/CheckoutSteps';
 
 const PaymentScreen = () => {
@@ -11,9 +11,11 @@ const PaymentScreen = () => {
   const cart = useSelector((state) => state.cart);
   const { shippingAddress } = cart;
 
-  if (!shippingAddress) {
-    navigate('/shipping');
-  }
+  useEffect(() => {
+    if (!shippingAddress.address) {
+      navigate('/shipping');
+    }
+  }, [navigate, shippingAddress]);
 
   const [paymentMethod, setPaymentMethod] = useState('PayPal');
 
@@ -35,6 +37,7 @@ const PaymentScreen = () => {
 
           <Col>
             <Form.Check
+              className='my-2'
               type='radio'
               label='PayPal or Credit Card'
               id='PayPal'
