@@ -1,77 +1,50 @@
-import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { LinkContainer } from 'react-router-bootstrap';
 import { Button, Table, Row, Col } from 'react-bootstrap';
-import { useDispatch, useSelector } from 'react-redux';
+import { FaEdit, FaPlus, FaTrash } from 'react-icons/fa';
 import Message from '../components/Message';
 import Loader from '../components/Loader';
 import Paginate from '../components/Paginate';
 import {
-  listProducts,
-  deleteProduct,
-  createProduct,
-} from '../actions/productActions';
-import { useNavigate, useParams } from 'react-router';
-import {
-  PRODUCT_CREATE_RESET,
-  PRODUCT_DETAILS_RESET,
-} from '../constants/productConstants';
+  useGetProductsQuery,
+  useDeleteProductMutation,
+  useCreateProductMutation,
+} from '../../slices/productsApiSlice';
+import { toast } from 'react-toastify';
+import { useParams } from 'react-router-dom';
 
 const ProductListScreen = () => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-
   const pageNumber = useParams().pageNumber || 1;
 
-  const productList = useSelector((state) => state.productList);
-  const { loading, error, products, pages, page } = productList;
-
-  const userLogin = useSelector((state) => state.userLogin);
-  const { userInfo } = userLogin;
-
-  const productDelete = useSelector((state) => state.productDelete);
-  const {
-    loading: loadingDelete,
-    error: errorDelete,
-    success: successDelete,
-  } = productDelete;
-
-  const productCreate = useSelector((state) => state.productCreate);
-  const {
-    loading: loadingCreate,
-    error: errorCreate,
-    success: successCreate,
-    product: createdProduct,
-  } = productCreate;
-
-  useEffect(() => {
-    dispatch({ type: PRODUCT_CREATE_RESET });
-    dispatch({ type: PRODUCT_DETAILS_RESET });
-    if (!userInfo.isAdmin) {
-      navigate('/login');
-    }
-    if (successCreate) {
-      navigate(`/admin/product/${createdProduct._id}/edit`);
-    } else {
-      dispatch(listProducts('', pageNumber));
-    }
-  }, [
-    dispatch,
-    navigate,
-    userInfo,
-    successDelete,
-    successCreate,
-    createdProduct,
+  const { data, isLoading, error, refetch } = useGetProductsQuery({
     pageNumber,
-  ]);
+  });
 
-  const deleteHandler = (id) => {
-    if (window.confirm('Are you sure?')) {
-      dispatch(deleteProduct(id));
+  const [deleteProduct, { isLoading: loadingDelete }] =
+    useDeleteProductMutation();
+
+  const deleteHandler = async (id) => {
+    if (window.confirm('Are you sure')) {
+      try {
+        await deleteProduct(id);
+        refetch();
+      } catch (err) {
+        toast.error(err?.data?.message || err.error);
+      }
     }
   };
 
-  const createProductHandler = () => {
-    dispatch(createProduct());
+  const [createProduct, { isLoading: loadingCreate }] =
+    useCreateProductMutation();
+
+  const createProductHandler = async () => {
+    if (window.confirm('Are you sure you want to create a new product?')) {
+      try {
+        await createProduct();
+        refetch();
+      } catch (err) {
+        toast.error(err?.data?.message || err.error);
+      }
+    }
   };
 
   return (
@@ -82,15 +55,13 @@ const ProductListScreen = () => {
         </Col>
         <Col className='text-end'>
           <Button className='my-4' onClick={createProductHandler}>
-            <i className='fas fa-plus'> Create Product</i>
+            <FaPlus /> Create Product
           </Button>
         </Col>
       </Row>
       {loadingDelete && <Loader />}
-      {errorDelete && <Message variant='danger'>{errorDelete}</Message>}
       {loadingCreate && <Loader />}
-      {errorCreate && <Message variant='danger'>{errorCreate}</Message>}
-      {loading ? (
+      {isLoading ? (
         <Loader />
       ) : error ? (
         <Message variant='danger'>{error}</Message>
@@ -108,7 +79,7 @@ const ProductListScreen = () => {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
+              {data.products.map((product) => (
                 <tr key={product._id}>
                   <td>{product._id}</td>
                   <td>{product.name}</td>
@@ -116,27 +87,24 @@ const ProductListScreen = () => {
                   <td>{product.category}</td>
                   <td>{product.brand}</td>
                   <td>
-                    <Button
-                      as={Link}
-                      to={`/admin/product/${product._id}/edit`}
-                      variant='light'
-                      className='btn-sm'
-                    >
-                      <i className='fas fa-edit'></i>
-                    </Button>
+                    <LinkContainer to={`/admin/product/${product._id}/edit`}>
+                      <Button variant='light' className='btn-sm mx-2'>
+                        <FaEdit />
+                      </Button>
+                    </LinkContainer>
                     <Button
                       variant='danger'
                       className='btn-sm'
                       onClick={() => deleteHandler(product._id)}
                     >
-                      <i className='fas fa-trash'></i>
+                      <FaTrash style={{ color: 'white' }} />
                     </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </Table>
-          <Paginate pages={pages} page={page} isAdmin={true} />
+          <Paginate pages={data.pages} page={data.page} isAdmin={true} />
         </>
       )}
     </>

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Form, Button } from 'react-bootstrap';
-import { useDispatch, useSelector } from 'react-redux';
-import { useParams } from 'react-router';
-import { useNavigate } from 'react-router';
 import Message from '../components/Message';
 import Loader from '../components/Loader';
 import FormContainer from '../components/FormContainer';
-import { getUserDetails, updateUser } from '../actions/userActions';
-import { USER_UPDATE_RESET } from '../constants/userConstants';
+import {
+  useGetUserDetailsQuery,
+  useUpdateUserMutation,
+} from '../../slices/usersApiSlice';
+import { toast } from 'react-toastify';
 
 const UserEditScreen = () => {
   const [email, setEmail] = useState('');
@@ -18,46 +18,35 @@ const UserEditScreen = () => {
   let { id: userId } = useParams();
   console.log(userId);
 
-  const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const userDetails = useSelector((state) => state.userDetails);
-  const { loading, error, user } = userDetails;
-
-  const userUpdate = useSelector((state) => state.userUpdate);
   const {
-    loading: loadingUpdate,
-    error: errorUpdate,
-    success: successUpdate,
-  } = userUpdate;
+    data: user,
+    isLoading,
+    error,
+    refetch,
+  } = useGetUserDetailsQuery(userId);
+
+  const [updateUser, { isLoading: loadingUpdate }] = useUpdateUserMutation();
 
   useEffect(() => {
-    if (successUpdate) {
-      dispatch({ type: USER_UPDATE_RESET });
-      navigate('/admin/userlist');
-    } else {
-      if (!user.name || user._id !== userId) {
-        dispatch(getUserDetails(userId));
-      } else {
-        setName(user.name);
-        setEmail(user.email);
-        setIsAdmin(user.isAdmin);
-      }
+    if (user) {
+      setName(user.name);
+      setEmail(user.email);
+      setIsAdmin(user.isAdmin);
     }
-  }, [
-    dispatch,
-    navigate,
-    successUpdate,
-    user._id,
-    user.email,
-    user.isAdmin,
-    user.name,
-    userId,
-  ]);
+  }, [user]);
 
-  const submitHandler = (e) => {
+  const submitHandler = async (e) => {
     e.preventDefault();
-    dispatch(updateUser({ _id: userId, name, email, isAdmin }));
+    try {
+      await updateUser({ userId, name, email, isAdmin });
+      toast.success('user updated successfully');
+      refetch();
+      navigate('/admin/userlist');
+    } catch (err) {
+      toast.error(err?.data?.message || err.error);
+    }
   };
 
   return (
@@ -68,11 +57,13 @@ const UserEditScreen = () => {
       <FormContainer>
         <h1>Edit User</h1>
         {loadingUpdate && <Loader />}
-        {errorUpdate && <Message variant='danger'>{errorUpdate}</Message>}
-        {loading ? (
+
+        {isLoading ? (
           <Loader />
         ) : error ? (
-          <Message variant='danger'>{error}</Message>
+          <Message variant='danger'>
+            {error?.data?.message || error.error}
+          </Message>
         ) : (
           <Form onSubmit={submitHandler}>
             <Form.Group controlId='name'>
@@ -100,7 +91,7 @@ const UserEditScreen = () => {
                 type='checkbox'
                 label='Is Admin'
                 checked={isAdmin}
-                onChange={(e) => setIsAdmin(e.target.check)}
+                onChange={(e) => setIsAdmin(e.target.checked)}
               ></Form.Check>
             </Form.Group>
 
