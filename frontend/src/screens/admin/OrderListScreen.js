@@ -1,37 +1,22 @@
-import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Button, Table } from 'react-bootstrap';
-import { useDispatch, useSelector } from 'react-redux';
-import Message from '../components/Message';
-import Loader from '../components/Loader';
-import { listAdminOrders } from '../actions/orderActions';
-import { useNavigate } from 'react-router';
+import { LinkContainer } from 'react-router-bootstrap';
+import { Table, Button } from 'react-bootstrap';
+import { FaTimes } from 'react-icons/fa';
+import Message from '../../components/Message';
+import Loader from '../../components/Loader';
+import { useGetOrdersQuery } from '../../slices/ordersApiSlice';
 
 const OrderListScreen = () => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-
-  const orderListAdmin = useSelector((state) => state.orderListAdmin);
-  const { loading, error, orders } = orderListAdmin;
-
-  const userLogin = useSelector((state) => state.userLogin);
-  const { userInfo } = userLogin;
-
-  useEffect(() => {
-    if (userInfo && userInfo.isAdmin) {
-      dispatch(listAdminOrders());
-    } else {
-      navigate('/login');
-    }
-  }, [dispatch, navigate, userInfo]);
+  const { data: orders, isLoading, error } = useGetOrdersQuery();
 
   return (
     <>
       <h1>Orders</h1>
-      {loading ? (
+      {isLoading ? (
         <Loader />
       ) : error ? (
-        <Message variant='danger'>{error}</Message>
+        <Message variant='danger'>
+          {error?.data?.message || error.error}
+        </Message>
       ) : (
         <Table striped bordered hover responsive className='table-sm'>
           <thead>
@@ -56,26 +41,23 @@ const OrderListScreen = () => {
                   {order.isPaid ? (
                     order.paidAt.substring(0, 10)
                   ) : (
-                    <i className='fas fa-times' style={{ color: 'red' }}></i>
+                    <FaTimes style={{ color: 'red' }} />
                   )}
                 </td>
                 <td>
                   {order.isDelivered ? (
                     order.deliveredAt.substring(0, 10)
                   ) : (
-                    <i className='fas fa-times' style={{ color: 'red' }}></i>
+                    <FaTimes style={{ color: 'red' }} />
                   )}
                 </td>
 
                 <td>
-                  <Button
-                    as={Link}
-                    to={`/order/${order._id}`}
-                    variant='light'
-                    className='btn-sm'
-                  >
-                    Details
-                  </Button>
+                  <LinkContainer to={`/order/${order._id}`}>
+                    <Button variant='light' className='btn-sm'>
+                      Details
+                    </Button>
+                  </LinkContainer>
                 </td>
               </tr>
             ))}

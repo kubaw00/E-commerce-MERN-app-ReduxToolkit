@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Link } from 'react-router-dom';
 import { Form, Button } from 'react-bootstrap';
-import { useDispatch, useSelector } from 'react-redux';
-import { useParams, useNavigate } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import Message from '../components/Message';
 import Loader from '../components/Loader';
 import FormContainer from '../components/FormContainer';
-import { listProductDetails, updateProduct } from '../actions/productActions';
-import { PRODUCT_UPDATE_RESET } from '../constants/productConstants';
+import { toast } from 'react-toastify';
+import {
+  useGetProductDetailsQuery,
+  useUpdateProductMutation,
+  useUploadProductImageMutation,
+} from '../../slices/productsApiSlice';
 
 const ProductEditScreen = () => {
   const [name, setName] = useState('');
@@ -18,50 +19,41 @@ const ProductEditScreen = () => {
   const [category, setCategory] = useState('');
   const [countInStock, setCountInStock] = useState(0);
   const [description, setDescription] = useState('');
-  const [uploading, setUploading] = useState(false);
 
   let { id: productId } = useParams();
 
-  const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const productDetails = useSelector((state) => state.productDetails);
-  const { loading, error, product } = productDetails;
-
-  const userLogin = useSelector((state) => state.userLogin);
-  const { userInfo } = userLogin;
-
-  const productUpdate = useSelector((state) => state.productUpdate);
   const {
-    loading: loadingUpdate,
-    error: errorUpdate,
-    success: successUpdate,
-  } = productUpdate;
+    data: product,
+    isLoading,
+    refetch,
+    error,
+  } = useGetProductDetailsQuery(productId);
+
+  const [uploadProductImage, { isLoading: loadingUpload }] =
+    useUploadProductImageMutation();
+
+  const [updateProduct, { isLoading: loadingUpdate }] =
+    useUpdateProductMutation();
 
   useEffect(() => {
-    if (successUpdate) {
-      dispatch({ type: PRODUCT_UPDATE_RESET });
-      navigate('/admin/productlist');
-    } else {
-      if (!product.name || product._id !== productId) {
-        dispatch(listProductDetails(productId));
-      } else {
-        setName(product.name);
-        setPrice(product.price);
-        setImage(product.image);
-        setBrand(product.brand);
-        setCategory(product.category);
-        setCountInStock(product.countInStock);
-        setDescription(product.description);
-      }
+    if (product) {
+      setName(product.name);
+      setPrice(product.price);
+      setImage(product.image);
+      setBrand(product.brand);
+      setCategory(product.category);
+      setCountInStock(product.countInStock);
+      setDescription(product.description);
     }
-  }, [dispatch, navigate, product, productId, successUpdate]);
+  }, [product]);
 
-  const submitHandler = (e) => {
+  const submitHandler = async (e) => {
     e.preventDefault();
-    dispatch(
-      updateProduct({
-        _id: productId,
+    try {
+      await updateProduct({
+        productId,
         name,
         price,
         image,
@@ -69,31 +61,24 @@ const ProductEditScreen = () => {
         category,
         description,
         countInStock,
-      })
-    );
+      });
+      toast.success('Product updated');
+      refetch();
+      navigate('/admin/productlist');
+    } catch (err) {
+      toast.error(err?.data?.message || err.error);
+    }
   };
 
   const uploadFileHandler = async (e) => {
-    const file = e.target.files[0];
     const formData = new FormData();
-    formData.append('image', file);
-    setUploading(true);
-
+    formData.append('image', e.target.files[0]);
     try {
-      const config = {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${userInfo.token}`,
-        },
-      };
-
-      const { data } = await axios.post('/api/upload', formData, config);
-      console.log(data);
-      setImage(data);
-      setUploading(false);
-    } catch (error) {
-      console.log(error);
-      setUploading(false);
+      const res = await uploadProductImage(formData).unwrap();
+      toast.success(res.message);
+      setImage(res.image);
+    } catch (err) {
+      toast.error(err?.data?.message || err.error);
     }
   };
 
@@ -105,8 +90,8 @@ const ProductEditScreen = () => {
       <FormContainer>
         <h1>Edit Product</h1>
         {loadingUpdate && <Loader />}
-        {errorUpdate && <Message variant='danger'>{errorUpdate}</Message>}
-        {loading ? (
+
+        {isLoading ? (
           <Loader />
         ) : error ? (
           <Message variant='danger'>{error}</Message>
@@ -140,15 +125,12 @@ const ProductEditScreen = () => {
                 value={image}
                 onChange={(e) => setImage(e.target.value)}
               ></Form.Control>
-              {/* <Form.File
-                id='img-file'
-                label='Choose file'
-                custom
+              <Form.Control
+                label='Choose File'
                 onChange={uploadFileHandler}
-              ></Form.File> */}
-
-              <Form.Control type='file' onChange={uploadFileHandler} />
-              {uploading && <Loader />}
+                type='file'
+              ></Form.Control>
+              {loadingUpload && <Loader />}
             </Form.Group>
 
             <Form.Group className='py-2' controlId='brand'>
@@ -191,7 +173,11 @@ const ProductEditScreen = () => {
               ></Form.Control>
             </Form.Group>
 
-            <Button className='my-2' type='submit' variant='primary'>
+            <Button
+              type='submit'
+              variant='primary'
+              style={{ marginTop: '1rem' }}
+            >
               Update
             </Button>
           </Form>
