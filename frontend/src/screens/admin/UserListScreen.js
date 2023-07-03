@@ -1,43 +1,35 @@
-import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React from 'react';
 import { Button, Table } from 'react-bootstrap';
-import { useDispatch, useSelector } from 'react-redux';
 import Message from '../components/Message';
 import Loader from '../components/Loader';
-import { listUsers, deleteUser } from '../actions/userActions';
-import { useNavigate } from 'react-router';
+import {
+  useDeleteUserMutation,
+  useGetUsersQuery,
+} from '../../slices/usersApiSlice';
+import { toast } from 'react-toastify';
+import { LinkContainer } from 'react-router-bootstrap';
+import { FaTrash, FaEdit, FaCheck, FaTimes } from 'react-icons/fa';
 
 const UserListScreen = () => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
+  const { data: users, refetch, isLoading, error } = useGetUsersQuery();
 
-  const userList = useSelector((state) => state.userList);
-  const { loading, error, users } = userList;
+  const [deleteUser] = useDeleteUserMutation();
 
-  const userLogin = useSelector((state) => state.userLogin);
-  const { userInfo } = userLogin;
-
-  const userDelete = useSelector((state) => state.userDelete);
-  const { success: successDelete } = userDelete;
-
-  useEffect(() => {
-    if (userInfo && userInfo.isAdmin) {
-      dispatch(listUsers());
-    } else {
-      navigate('/login');
-    }
-  }, [dispatch, navigate, userInfo, successDelete]);
-
-  const deleteHandler = (id) => {
-    if (window.confirm('Are you sure?')) {
-      dispatch(deleteUser(id));
+  const deleteHandler = async (id) => {
+    if (window.confirm('Are you sure')) {
+      try {
+        await deleteUser(id);
+        refetch();
+      } catch (err) {
+        toast.error(err?.data?.message || err.error);
+      }
     }
   };
 
   return (
     <>
       <h1>Users</h1>
-      {loading ? (
+      {isLoading ? (
         <Loader />
       ) : error ? (
         <Message variant='danger'>{error}</Message>
@@ -47,7 +39,7 @@ const UserListScreen = () => {
             <tr>
               <th>ID</th>
               <th>NAME</th>
-              <th>EAMIL</th>
+              <th>EAMAIL</th>
               <th>ADMIN</th>
               <th></th>
             </tr>
@@ -57,34 +49,36 @@ const UserListScreen = () => {
               <tr key={user._id}>
                 <td>{user._id}</td>
                 <td>{user.name}</td>
-                <td>{user.email}</td>
                 <td>
                   <a href={`mailto:${user.email}`}>{user.email}</a>
                 </td>
                 <td>
                   {user.isAdmin ? (
-                    <i className='fas fa-check' style={{ color: 'green' }}></i>
+                    <FaCheck style={{ color: 'green' }} />
                   ) : (
-                    <i className='fas fa-times' style={{ color: 'red' }}></i>
+                    <FaTimes style={{ color: 'red' }} />
                   )}
                 </td>
                 <td>
-                  <Button
-                    as={Link}
-                    to={`/admin/user/${user._id}/edit`}
-                    variant='light'
-                    className='btn-sm'
-                  >
-                    <i className='fas fa-edit'></i>
-                  </Button>
-                  <Button
-                    variant='danger'
-                    className='btn-sm'
-                    disabled={userInfo._id === user._id}
-                    onClick={() => deleteHandler(user._id)}
-                  >
-                    <i className='fas fa-trash'></i>
-                  </Button>
+                  {user.isAdmin && (
+                    <>
+                      <LinkContainer
+                        to={`/admin/user/${user._id}/edit`}
+                        style={{ marginRight: '10px' }}
+                      >
+                        <Button variant='light' className='btn-sm'>
+                          <FaEdit />
+                        </Button>
+                      </LinkContainer>
+                      <Button
+                        variant='danger'
+                        className='btn-sm'
+                        onClick={() => deleteHandler(user._id)}
+                      >
+                        <FaTrash style={{ color: 'white' }} />
+                      </Button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
